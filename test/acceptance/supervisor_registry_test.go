@@ -33,9 +33,18 @@ func TestRegisterUnregister(t *testing.T) {
 	c := helpers.NewCity(t, testEnv)
 	c.Init("claude")
 
-	// gc init starts a standalone controller. Stop it first so register
-	// can hand management to the supervisor.
+	// gc init registers the city and starts a standalone controller. gc stop
+	// stops that controller and also unregisters the city from the supervisor,
+	// so the city is no longer registered after this point — re-register before
+	// exercising unregister.
 	c.GC("stop", c.Dir) //nolint:errcheck
+
+	t.Run("Register", func(t *testing.T) {
+		out, err := c.GC("register", c.Dir)
+		if err != nil {
+			t.Fatalf("gc register failed: %v\n%s", err, out)
+		}
+	})
 
 	t.Run("Unregister", func(t *testing.T) {
 		out, err := c.GC("unregister", c.Dir)
