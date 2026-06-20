@@ -4081,7 +4081,9 @@ Remove a city from the machine-wide supervisor registry.
 
 The argument may be a path to a city directory or a registered city name (as
 shown by 'gc cities'); a name is resolved against the supervisor registry. An
-existing local directory of the same name takes precedence over a registration.
+existing local city directory of the same name takes precedence over a
+registration; if a local city directory and a different registration both
+exist, the name is reported as ambiguous.
 If no argument is given, unregisters the current city (discovered from cwd).
 If the supervisor is running, it immediately stops managing the city.
 
