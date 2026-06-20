@@ -486,11 +486,10 @@ func TestDoUnregister(t *testing.T) {
 	}
 }
 
-// gc unregister takes a city directory path, not a name. When the argument
-// does not resolve to a registered city — the common footgun is passing the
-// NAME shown by `gc cities`, or a wrong path — unregister must fail loudly
-// instead of silently exiting 0 (non-JSON) or reporting a false success
-// (JSON). Regression for ga-m3ev9r.
+// gc unregister fails loudly when the target resolves to a path that is not
+// registered (rather than exiting 0 silently / fabricating JSON success).
+// A bare unregistered NAME is handled separately by resolveCityRef; this
+// covers an explicit unregistered path. Regression for ga-m3ev9r.
 func TestDoUnregisterUnknownTargetFailsLoudly(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GC_HOME", dir)
@@ -613,6 +612,54 @@ func TestUnregisterUnknownTargetJSONEnvelopeReportsNotOK(t *testing.T) {
 	}
 	if env.OK {
 		t.Fatalf("stdout ok = true, want false: %s", stdout.String())
+	}
+}
+
+// gc unregister accepts a registered city NAME (as shown by gc cities), not
+// just a path (ga-m3ev9r).
+func TestDoUnregisterByName(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GC_HOME", dir)
+	t.Chdir(t.TempDir()) // cwd has no ./my-city, so the name resolves via the registry
+
+	cityPath := filepath.Join(dir, "my-city")
+	if err := os.MkdirAll(cityPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte("[workspace]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := supervisor.NewRegistry(supervisor.RegistryPath())
+	if err := reg.Register(cityPath, "my-city"); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := doUnregister([]string{"my-city"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	entries, err := reg.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("registry entries = %v, want empty after unregister-by-name", entries)
+	}
+}
+
+func TestDoUnregisterByUnknownNameFailsLoudly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GC_HOME", dir)
+	t.Chdir(t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+	code := doUnregister([]string{"ghost-name"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("code = %d, want 1; stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not a registered city name") {
+		t.Fatalf("stderr = %q, want a name-aware 'not a registered city name' diagnostic", stderr.String())
 	}
 }
 
